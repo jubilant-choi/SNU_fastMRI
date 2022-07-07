@@ -3,7 +3,6 @@ import shutil
 from utils.learning.train_part import train
 from pathlib import Path
 
-
 def parse():
     parser = argparse.ArgumentParser(description='Train Unet on FastMRI challenge Images',
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)

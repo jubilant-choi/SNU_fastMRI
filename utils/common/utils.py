@@ -6,6 +6,7 @@ LICENSE file in the root directory of this source tree.
 
 from skimage.metrics import structural_similarity
 from math import sqrt
+import json
 import h5py
 import numpy as np
 
@@ -70,3 +71,17 @@ def ifftc(data, axes=(-2, -1), norm="ortho"):
 def rss_combine(data, axis, keepdims=False):
     return np.sqrt(np.sum(np.square(np.abs(data)), axis, keepdims=keepdims))
 
+def save_exp_result(save_dir, setting, result):
+    makedir(save_dir)
+    exp_name = setting['exp_name']
+
+    filename = save_dir + '/{}.json'.format(exp_name)
+    result.update(setting)
+
+    with open(filename, 'w') as f:
+        json.dump(result, f)
+
+
+def makedir(path):
+    if not os.path.isdir(path):
+        os.makedirs(path)

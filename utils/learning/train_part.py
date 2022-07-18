@@ -31,8 +31,8 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
 
         if iter % args.report_interval == 0:
             print(
-                f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
-                f'Iter = [{iter:4d}/{len(data_loader):4d}] '
+                f'Epoch = [{epoch+1:3d}/{args.num_epochs:3d}] '
+                f'Iter = [{iter+1:4d}/{len(data_loader):4d}] '
                 f'Loss = {loss.item():.4g} '
                 f'Time = {time.perf_counter() - start_iter:.4f}s',
             )
@@ -105,13 +105,16 @@ def train(args):
 
     best_val_loss = 1.
     start_epoch = 0
-
+    
+    result = {}
+    result['train_losses'] = []
+    result['val_losses'] = []
     
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
 
     for epoch in range(start_epoch, args.num_epochs):
-        print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
+        print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
@@ -123,10 +126,13 @@ def train(args):
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
         print(
-            f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
+            f'Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
             f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )
-
+        
+        result['train_losses'].append(train_loss)
+        result['val_losses'].append(val_loss)
+        
         if is_new_best:
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@NewRecord@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             start = time.perf_counter()

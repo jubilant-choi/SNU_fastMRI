@@ -44,7 +44,7 @@ if __name__ == '__main__':
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
     result = train(args)
-    save_exp_result(save_dir=args.json_dir, setting=vars(args).copy(), result=result)
+    save_exp_result(save_dir=args.json_dir_str, setting=vars(args).copy(), result=result)
     
 def run():
     args = parse()

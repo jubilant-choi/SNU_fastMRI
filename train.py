@@ -2,6 +2,7 @@ import argparse
 import shutil
 import hashlib
 from utils.learning.train_part import train
+from utils.common.utils import save_exp_result
 from pathlib import Path
 
 def parse():
@@ -22,7 +23,7 @@ def parse():
     parser.add_argument('--target-key', type=str, default='image_label', help='Name of target key')
     parser.add_argument('--max-key', type=str, default='max', help='Name of max key in attributes')
     
-    parser.add_argument('-u', '--user', type=str, choices=['SJ,JB'], required=True, help='User name')
+    parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
       
     args = parser.parse_args()
@@ -34,13 +35,26 @@ def parse():
 
 if __name__ == '__main__':
     args = parse()
-    args.exp_dir = '../result' / Path(args.user) / args.net_name / 'checkpoints'
-    args.val_dir = '../result' / Path(args.user) / args.net_name / 'reconstructions_val'
-    args.json_dir = '../result' / Path(args.user) / args.net_name / 'jsons'
-    args.main_dir = '../result' / Path(args.user) / args.net_name / __file__
+    args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
+    args.val_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_val'
+    args.json_dir = './result' / Path(args.user) / args.net_name / 'jsons'
+    args.main_dir = './result' / Path(args.user) / args.net_name / __file__
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
     result = train(args)
     save_exp_result(save_dir=args.json_dir, setting=vars(args).copy(), result=result)
+    
+def run():
+    args = parse()
+    args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
+    args.val_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_val'
+    args.json_dir = './result' / Path(args.user) / args.net_name / 'jsons'
+    args.main_dir = './result' / Path(args.user) / args.net_name / __file__
+
+    args.exp_dir.mkdir(parents=True, exist_ok=True)
+    args.val_dir.mkdir(parents=True, exist_ok=True)
+
+    result = train(args)
+    save_exp_result(save_dir=args.json_dir._str, setting=vars(args).copy(), result=result)

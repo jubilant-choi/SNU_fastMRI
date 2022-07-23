@@ -42,9 +42,8 @@ if __name__ == '__main__':
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
-
-    result = train(args)
-    save_exp_result(save_dir=args.json_dir_str, setting=vars(args).copy(), result=result)
+    print(f"Experiment <{args.exp_name}> with model <{args.net_name}> starts")
+    train(args)
     
 def run():
     args = parse()
@@ -56,5 +55,4 @@ def run():
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
-    result = train(args)
-    save_exp_result(save_dir=args.json_dir._str, setting=vars(args).copy(), result=result)
+    train(args)

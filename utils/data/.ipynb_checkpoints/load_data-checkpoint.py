@@ -58,6 +58,6 @@ def create_data_loaders(data_path, args, isforward=False):
     data_loader = DataLoader(
         dataset=data_storage,
         batch_size=args.batch_size,
-        num_workers=6 # edited
+        num_workers=4 # edited
     )
     return data_loader

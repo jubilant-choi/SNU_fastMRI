@@ -3,8 +3,8 @@ from datetime import datetime
 
 user = 'JB'
 model = 'newUnet'
-batch = 256
-epoch = 80
+batch = 12
+epoch = 30
 lrs = [1e-3]”
 base_exp_name = 'newUnet_test'
 

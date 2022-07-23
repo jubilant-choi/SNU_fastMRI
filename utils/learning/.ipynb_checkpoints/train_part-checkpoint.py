@@ -46,7 +46,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     return total_loss, time.perf_counter() - start_epoch
 
 
-def validate(args, model, data_loader):
+def validate(args, model, scheduler ,data_loader):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -77,6 +77,9 @@ def validate(args, model, data_loader):
             [out for _, out in sorted(inputs[fname].items())]
         )
         metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
+        
+    scheduler.step(metric_loss)  
+    
     num_subjects = len(reconstructions)
     return metric_loss, num_subjects, reconstructions, targets, inputs, time.perf_counter() - start
 
@@ -117,6 +120,7 @@ def train(args):
     
     loss_type = SSIMLoss().to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1, min_lr=1e-9)
 
     best_val_loss = 1.
     start_epoch = 0
@@ -132,7 +136,7 @@ def train(args):
         print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
-        val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
+        val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, scheduler)
 
         val_loss = val_loss / num_subjects
 
@@ -140,7 +144,7 @@ def train(args):
         best_val_loss = min(best_val_loss, val_loss)
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
-        print(
+        print('\n'
             f'Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
             f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )

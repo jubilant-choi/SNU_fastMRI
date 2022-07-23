@@ -6,9 +6,10 @@ import time
 
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
-from utils.common.utils import save_reconstructions, ssim_loss
+from utils.common.utils import save_reconstructions, ssim_loss, save_exp_result
 from utils.common.loss_function import SSIMLoss
 from utils.model.unet import Unet
+from utils.model.unet_advanced import Unet as newUnet
 
 def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -91,15 +92,25 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
     if is_new_best:
         shutil.copyfile(exp_dir / 'model.pt', exp_dir / 'best_model.pt')
 
-
+def select_model(args):
+    net_name = args.net_name._str
+    if net_name == 'test_Unet':
+        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
+    elif net_name == 'newUnet':
+        model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans)
+    else:
+        raise Exception("Invalid Model was given as an argument :", net_name)
+    
+    return model
         
 def train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
-    print('Current cuda device: ', torch.cuda.current_device())
+    print('Current .cuda device: ', torch.cuda.current_device())
     
-    model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
+    model = select_model(args)
     model.to(device=device)
+    
     loss_type = SSIMLoss().to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
 
@@ -140,3 +151,6 @@ def train(args):
             print(
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )
+            
+        
+        save_exp_result(save_dir=args.json_dir._str, setting=vars(args).copy(), result=result)

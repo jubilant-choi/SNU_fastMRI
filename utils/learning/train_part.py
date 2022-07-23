@@ -120,7 +120,7 @@ def train(args):
     
     loss_type = SSIMLoss().to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1, min_lr=1e-9)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1, min_lr=1e-9)
 
     best_val_loss = 1.
     start_epoch = 0
@@ -144,7 +144,7 @@ def train(args):
         best_val_loss = min(best_val_loss, val_loss)
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
-        print(
+        print('\n'
             f'Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
             f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )

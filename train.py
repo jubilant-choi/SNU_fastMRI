@@ -45,14 +45,14 @@ if __name__ == '__main__':
     print(f"Experiment <{args.exp_name}> with model <{args.net_name}> starts")
     train(args)
     
-def run():
-    args = parse()
-    args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
-    args.val_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_val'
-    args.json_dir = './result' / Path(args.user) / args.net_name / 'jsons'
-    args.main_dir = './result' / Path(args.user) / args.net_name / __file__
+# def run():
+#     args = parse()
+#     args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
+#     args.val_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_val'
+#     args.json_dir = './result' / Path(args.user) / args.net_name / 'jsons'
+#     args.main_dir = './result' / Path(args.user) / args.net_name / __file__
 
-    args.exp_dir.mkdir(parents=True, exist_ok=True)
-    args.val_dir.mkdir(parents=True, exist_ok=True)
+#     args.exp_dir.mkdir(parents=True, exist_ok=True)
+#     args.val_dir.mkdir(parents=True, exist_ok=True)
 
-    train(args)
+#     train(args)

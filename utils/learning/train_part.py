@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import time
 
+from tqdm import tqdm
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss, save_exp_result
@@ -16,28 +17,31 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
     total_loss = 0.
+    with tqdm(data_loader, unit="batch") as tepoch:
+        for iter, data in enumerate(tepoch):
+            tepoch.set_description(f"Epoch {epoch+1}")
+            
+            input, target, maximum, _, _ = data
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
 
-    for iter, data in enumerate(data_loader):
-        input, target, maximum, _, _ = data
-        input = input.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
-        maximum = maximum.cuda(non_blocking=True)
+            output = model(input)
+            loss = loss_type(output, target, maximum)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-        output = model(input)
-        loss = loss_type(output, target, maximum)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-
-        if iter % args.report_interval == 0:
-            print(
-                f'Epoch = [{epoch+1:3d}/{args.num_epochs:3d}] '
-                f'Iter = [{iter+1:4d}/{len(data_loader):4d}] '
-                f'Loss = {loss.item():.4g} '
-                f'Time = {time.perf_counter() - start_iter:.4f}s',
-            )
-        start_iter = time.perf_counter()
+    #         if iter % args.report_interval == 0:
+    #             print(
+    #                 f'Epoch = [{epoch+1:3d}/{args.num_epochs:3d}] '
+    #                 f'Iter = [{iter+1:4d}/{len(data_loader):4d}] '
+    #                 f'Loss = {loss.item():.4g} '
+    #                 f'Time = {time.perf_counter() - start_iter:.4f}s',
+    #             )
+    #         start_iter = time.perf_counter()
+            tepoch.set_postfix(loss=loss.item())
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
 
@@ -87,13 +91,13 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
             'best_val_loss': best_val_loss,
             'exp_dir': exp_dir
         },
-        f=exp_dir / 'model.pt'
+        f=exp_dir / f'{args.exp_name+"_epoch"+str(epoch)}.pt'
     )
     if is_new_best:
-        shutil.copyfile(exp_dir / 'model.pt', exp_dir / 'best_model.pt')
+        shutil.copyfile(exp_dir / 'model.pt', exp_dir / f'{args.exp_name}_best.pt')
 
 def select_model(args):
-    net_name = args.net_name._str
+    net_name = args.net_name.name
     if net_name == 'test_Unet':
         model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
     elif net_name == 'newUnet':
@@ -124,7 +128,7 @@ def train(args):
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
 
-    for epoch in range(start_epoch, args.num_epochs):
+    for epoch in tqdm(range(start_epoch, args.num_epochs)):
         print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
@@ -153,4 +157,4 @@ def train(args):
             )
             
         
-        save_exp_result(save_dir=args.json_dir._str, setting=vars(args).copy(), result=result)
+        save_exp_result(save_dir=args.json_dir, setting=vars(args).copy(), result=result)

@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 import os
 from skimage.metrics import structural_similarity
 from math import sqrt
+from pathlib import Path
 import json
 import h5py
 import numpy as np
@@ -74,9 +75,14 @@ def rss_combine(data, axis, keepdims=False):
 
 def save_exp_result(save_dir, setting, result):
     makedir(save_dir)
+    for key in setting.copy():
+        if isinstance(setting[key],Path):
+            del setting[key]
+            
     exp_name = setting['exp_name']
 
-    filename = save_dir + '/{}.json'.format(exp_name)
+    filename = save_dir / '{}.json'.format(exp_name)
+    print(filename)
     result.update(setting)
 
     with open(filename, 'w') as f:

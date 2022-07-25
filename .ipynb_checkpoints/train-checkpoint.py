@@ -23,8 +23,10 @@ def parse():
     parser.add_argument('--target-key', type=str, default='image_label', help='Name of target key')
     parser.add_argument('--max-key', type=str, default='max', help='Name of max key in attributes')
     
+    parser.add_argument('--load', type=str, default='', help='Name of saved model that will be loaded')
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
+    
       
     args = parser.parse_args()
     
@@ -42,7 +44,7 @@ if __name__ == '__main__':
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Experiment <{args.exp_name}> with model <{args.net_name}> starts")
+    print(f"*** Experiment <{args.exp_name}> with model <{args.net_name}> starts ***")
     train(args)
     
 # def run():

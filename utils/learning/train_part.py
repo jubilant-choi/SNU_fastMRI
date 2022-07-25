@@ -46,7 +46,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     return total_loss, time.perf_counter() - start_epoch
 
 
-def validate(args, model, scheduler ,data_loader):
+def validate(args, model, data_loader, scheduler):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -98,6 +98,9 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
     )
     if is_new_best:
         shutil.copyfile(exp_dir / 'model.pt', exp_dir / f'{args.exp_name}_best.pt')
+        
+    if epoch > 1:
+        os.remove(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt')
 
 def select_model(args):
     net_name = args.net_name.name
@@ -115,15 +118,26 @@ def train(args):
     torch.cuda.set_device(device)
     print('Current .cuda device: ', torch.cuda.current_device())
     
-    model = select_model(args)
-    model.to(device=device)
-    
     loss_type = SSIMLoss().to(device=device)
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_deacy=0.001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1, min_lr=1e-9)
-
-    best_val_loss = 1.
-    start_epoch = 0
+    
+    model = select_model(args)
+    
+    if args.load == '':
+        start_epoch = 0 
+        best_val_loss = 1. 
+    else:
+        print(f'*** Load Checkpoint for f{args.load} ***')
+        checkpoint = torch.load(args.exp_dir / args.load)
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        start_epoch = checkpoint['epoch']-1
+        best_val_loss = checkpoint['best_val_loss']
+        print(f"Start Epoch = {start_epoch}, best validation loss = {best_val_loss}")
+        print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}")
+        
+    model.to(device=device)
     
     result = {}
     result['train_losses'] = []
@@ -132,7 +146,7 @@ def train(args):
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
 
-    for epoch in tqdm(range(start_epoch, args.num_epochs)):
+    for epoch in tqdm(range(start_epoch, start_epoch+args.num_epochs)):
         print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
@@ -145,19 +159,19 @@ def train(args):
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
         print('\n'
-            f'Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
-            f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
+            f'* Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] | Loss (Train/Val) = {train_loss:.4g} / {val_loss:.4g}'
+            f'| Time(Train/Val) = {train_time:.4f}s / {val_time:.4f}s | Learning rate = {optimizer.param_groups[0]['lr']}',
         )
         
         result['train_losses'].append(train_loss)
         result['val_losses'].append(val_loss)
         
         if is_new_best:
-            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@NewRecord@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            print("*** NewRecord ***")
             start = time.perf_counter()
             save_reconstructions(reconstructions, args.val_dir, targets=targets, inputs=inputs)
             print(
-                f'ForwardTime = {time.perf_counter() - start:.4f}s',
+                f' - ForwardTime = {time.perf_counter() - start:.4f}s',
             )
             
         

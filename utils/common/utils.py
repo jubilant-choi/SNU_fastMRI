@@ -82,7 +82,6 @@ def save_exp_result(save_dir, setting, result):
     exp_name = setting['exp_name']
 
     filename = save_dir / '{}.json'.format(exp_name)
-    print(filename)
     result.update(setting)
 
     with open(filename, 'w') as f:

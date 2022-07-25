@@ -73,16 +73,16 @@ def ifftc(data, axes=(-2, -1), norm="ortho"):
 def rss_combine(data, axis, keepdims=False):
     return np.sqrt(np.sum(np.square(np.abs(data)), axis, keepdims=keepdims))
 
-def save_exp_result(save_dir, setting, result):
+def save_exp_result(save_dir, setting, result, load=''):
     makedir(save_dir)
     for key in setting.copy():
         if isinstance(setting[key],Path):
             del setting[key]
             
     exp_name = setting['exp_name']
-
     filename = save_dir / '{}.json'.format(exp_name)
-    if args.load != '':
+    
+    if load != '':
         with open(filename, 'r') as f:
             prev_result = json.load(f)
         result['train_losses'] = prev_result['train_losses'] + result['train_losses']

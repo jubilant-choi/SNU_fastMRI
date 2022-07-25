@@ -100,7 +100,7 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
         f=exp_dir / f'{args.exp_name+"_epoch"+str(epoch)}.pt'
     )
     if is_new_best:
-        shutil.copyfile(exp_dir / 'model.pt', exp_dir / f'{args.exp_name}_best.pt')
+        shutil.copyfile(exp_dir / f'{args.exp_name+"_epoch"+str(epoch)}.pt', exp_dir / f'{args.exp_name}_best.pt')
         
     if epoch > 1:
         os.remove(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt')

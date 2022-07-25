@@ -176,4 +176,4 @@ def train(args):
             )
             
         
-        save_exp_result(save_dir=args.json_dir, setting=deepcopy(vars(args)), result=deepcopy(result), args.load)
+        save_exp_result(save_dir=args.json_dir, setting=deepcopy(vars(args)), result=deepcopy(result), load=args.load)

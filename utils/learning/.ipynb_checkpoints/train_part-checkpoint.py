@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 from collections import defaultdict
+from copy import deepcopy
 
 import numpy as np
 import torch
@@ -175,4 +176,4 @@ def train(args):
             )
             
         
-        save_exp_result(save_dir=args.json_dir, setting=vars(args).copy(), result=result)
+        save_exp_result(save_dir=args.json_dir, setting=deepcopy(vars(args)), result=deepcopy(result))

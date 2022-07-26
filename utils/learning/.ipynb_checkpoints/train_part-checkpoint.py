@@ -131,7 +131,7 @@ def train(args):
         start_epoch = 0 
         best_val_loss = 1. 
     else:
-        print(f'\n*** Load Checkpoint for f{args.load} ***')
+        print(f'\n*** Load Checkpoint for {args.load} ***')
         checkpoint = torch.load(args.exp_dir / args.load)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -160,7 +160,7 @@ def train(args):
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
         print('\n'
-            f'* Epoch = [{epoch+1:4d}/{args.num_epochs:4d}] | Loss (Train/Val) = {train_loss:.4g} / {val_loss:.4g}'
+            f'* Epoch = [{epoch+1:4d}/{start_epoch+args.num_epochs:4d}] | Loss (Train/Val) = {train_loss:.4g} / {val_loss:.4g}'
             f"| Time(Train/Val) = {train_time:.4f}s / {val_time:.4f}s | Learning rate = {optimizer.param_groups[0]['lr']}",
         )
         

@@ -14,6 +14,9 @@ def parse():
     parser.add_argument('-l', '--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('-r', '--report-interval', type=int, default=10, help='Report interval')
     parser.add_argument('-n', '--net-name', type=Path, default='test_Unet', help='Name of network')
+    parser.add_argument('-o', '--optim', type=str, default='Adam', help='Name of optimizer')
+    parser.add_argument('-s', '--scheduler', type=str, default='Plateau', help='Name of lr scheduler')
+    
     parser.add_argument('-t', '--data-path-train', type=Path, default='/root/input/train/image/', help='Directory of train data')
     parser.add_argument('-v', '--data-path-val', type=Path, default='/root/input/val/image/', help='Directory of validation data')
     

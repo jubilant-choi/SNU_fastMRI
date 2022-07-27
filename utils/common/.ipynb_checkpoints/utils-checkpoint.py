@@ -75,9 +75,9 @@ def rss_combine(data, axis, keepdims=False):
 
 def save_exp_result(save_dir, setting, result, load=''):
     makedir(save_dir)
-    for key in setting.copy():
-        if isinstance(setting[key],Path):
-            del setting[key]
+#     for key in setting.copy():
+#         if isinstance(setting[key],Path):
+#             del setting[key]
             
     exp_name = setting['exp_name']
     filename = save_dir / '{}.json'.format(exp_name)

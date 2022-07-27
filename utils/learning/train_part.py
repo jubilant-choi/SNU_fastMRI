@@ -81,7 +81,10 @@ def validate(args, model, data_loader, scheduler):
         )
         metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
         
-    scheduler.step(metric_loss)  
+    if args.scheduler == 'Plateau':
+        scheduler.step(metric_loss)  
+    else:
+        scheduler.step()
     
     num_subjects = len(reconstructions)
     return metric_loss, num_subjects, reconstructions, targets, inputs, time.perf_counter() - start
@@ -115,6 +118,22 @@ def select_model(args):
         raise Exception("Invalid Model was given as an argument :", net_name)
     
     return model
+
+def select_optimizer(args, model):
+    if args.optim == 'Adam':
+        return torch.optim.Adam(model.parameters(), args.lr, weight_decay=1e-5)
+    elif args.optim == 'SGD':
+        return torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-5)
+    else:
+        raise Exception("Invalid Optimizer was given as an argument :", args.optim)
+
+def select_scheduler(args, optimizer):
+    if args.scheduler == 'Plateau':
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.2, min_lr=1e-9)
+    elif args.scheduler == 'Cos':
+        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-8)
+    else:
+        raise Exception("Invalid Learning rate scheduler was given as an argument :", args.scheduler)
         
 def train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
@@ -124,8 +143,8 @@ def train(args):
     model = select_model(args)  
     model.to(device=device)
     loss_type = SSIMLoss().to(device=device)
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1, min_lr=1e-9)
+    optimizer = select_optimizer(args, model)
+    scheduler = select_scheduler(args, optimizer)
     
     if args.load == '':
         start_epoch = 0 

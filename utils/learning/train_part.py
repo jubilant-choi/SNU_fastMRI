@@ -133,6 +133,7 @@ def select_optimizer(args, model):
 
 def select_scheduler(args, optimizer):
     if args.scheduler in ['Plateau','P']:
+        args.scheduler = 'Plateau'
         return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.1, min_lr=1e-7)
     elif args.scheduler in ['Cos','C']:
         return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-8)

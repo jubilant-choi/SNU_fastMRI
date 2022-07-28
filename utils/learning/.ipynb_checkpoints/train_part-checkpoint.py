@@ -114,6 +114,10 @@ def select_model(args):
         model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
     elif net_name == 'newUnet':
         model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans)
+    elif 'newUnet' in net_name:
+        _, chans, pool_layer, drop = net_name.split('_')
+        model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans,
+                        chans = int(chans), num_pool_layers = int(pool_layer), drop_prob = float(drop))
     else:
         raise Exception("Invalid Model was given as an argument :", net_name)
     
@@ -128,9 +132,9 @@ def select_optimizer(args, model):
         raise Exception("Invalid Optimizer was given as an argument :", args.optim)
 
 def select_scheduler(args, optimizer):
-    if args.scheduler == 'Plateau':
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.2, min_lr=1e-9)
-    elif args.scheduler == 'Cos':
+    if args.scheduler in ['Plateau','P']:
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.1, min_lr=1e-7)
+    elif args.scheduler in ['Cos','C']:
         return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-8)
     else:
         raise Exception("Invalid Learning rate scheduler was given as an argument :", args.scheduler)

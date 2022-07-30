@@ -125,7 +125,7 @@ def select_model(args):
 
 def select_optimizer(args, model):
     if args.optim == 'Adam':
-        return torch.optim.Adam(model.parameters(), args.lr, weight_decay=1e-5)
+        return torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
     elif args.optim == 'SGD':
         return torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-5)
     else:
@@ -159,10 +159,12 @@ def train(args):
         checkpoint = torch.load(args.exp_dir / args.load)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        optimizer.param_groups[0]['lr'] = args.lr
         start_epoch = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
         print(f"Start Epoch = {start_epoch+1}, best validation loss = {best_val_loss:0.5f}")
-        print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}\n")
+        print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}")
+        print(f"Current learning rate is {optimizer.param_groups[0]['lr']}\n")
     
     result = {}
     result['train_losses'] = []

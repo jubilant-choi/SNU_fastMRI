@@ -4,7 +4,11 @@ import torch
 from collections import defaultdict
 from utils.common.utils import save_reconstructions
 from utils.data.load_data import create_data_loaders
+<<<<<<< HEAD
 from utils.model.unet_advanced import Unet
+=======
+from utils.model.unet import Unet
+>>>>>>> dcf65d342c92a38d72a87fe8fa5bcbf6aa4afb5e
 
 def test(args, model, data_loader):
     model.eval()

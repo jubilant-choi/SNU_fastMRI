@@ -1,8 +1,11 @@
 import os
-import shutil
+import copy
 import time
+import shutil
+import requests
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -12,8 +15,10 @@ from tqdm import tqdm
 from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss, save_exp_result
 from utils.common.loss_function import SSIMLoss
+from utils.model.testUnet import Unet as testUnet
 from utils.model.unet import Unet
-from utils.model.unet_advanced import Unet as newUnet
+from utils.model.varnet import VarNet
+
 
 def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -24,12 +29,18 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         for iter, data in enumerate(tepoch):
             tepoch.set_description(f"Epoch {epoch+1}")
             
-            input, target, maximum, _, _ = data
-            input = input.cuda(non_blocking=True)
+            if args.input_key == 'kspace':
+                mask, kspace, target, maximum, _, _ = data
+                mask = mask.cuda(non_blocking=True)
+                kspace = kspace.cuda(non_blocking=True)
+            else:
+                input, target, maximum, _, _ = data
+                input = input.cuda(non_blocking=True)
+                
             target = target.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
 
-            output = model(input)
+            output = model(input) if args.input_key != 'kspace' else model(kspace, mask)
             loss = loss_type(output, target, maximum)
             optimizer.zero_grad()
             loss.backward()
@@ -53,19 +64,31 @@ def validate(args, model, data_loader, scheduler):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
-    inputs = defaultdict(dict)
+    inputs = defaultdict(dict) if args.input_key != 'kspace' else None
     start = time.perf_counter()
 
     with torch.no_grad():
-        for iter, data in enumerate(data_loader):
-            input, target, _, fnames, slices = data
-            input = input.cuda(non_blocking=True)
-            output = model(input)
+        if args.input_key == 'kspace':
+            for iter, data in enumerate(data_loader):
+                mask, kspace, target, _, fnames, slices = data
+                kspace = kspace.cuda(non_blocking=True)
+                mask = mask.cuda(non_blocking=True)
+                output = model(kspace, mask)
+                
+                for i in range(output.shape[0]):
+                    reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
+                    targets[fnames[i]][int(slices[i])] = target[i].numpy()
+                    
+        else:
+            for iter, data in enumerate(data_loader):
+                input, target, _, fnames, slices = data
+                input = input.cuda(non_blocking=True)
+                output = model(input)       
 
-            for i in range(output.shape[0]):
-                reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
-                targets[fnames[i]][int(slices[i])] = target[i].numpy()
-                inputs[fnames[i]][int(slices[i])] = input[i].cpu().numpy()
+                for i in range(output.shape[0]):
+                    reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
+                    targets[fnames[i]][int(slices[i])] = target[i].numpy()
+                    inputs[fnames[i]][int(slices[i])] = input[i].cpu().numpy()
 
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
@@ -75,18 +98,19 @@ def validate(args, model, data_loader, scheduler):
         targets[fname] = np.stack(
             [out for _, out in sorted(targets[fname].items())]
         )
-    for fname in inputs:
-        inputs[fname] = np.stack(
-            [out for _, out in sorted(inputs[fname].items())]
-        )
-        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
-        
+    if inputs != None:
+        for fname in inputs:
+            inputs[fname] = np.stack(
+                [out for _, out in sorted(inputs[fname].items())]
+            )
+    metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])    
+    num_subjects = len(reconstructions)
+    
     if args.scheduler == 'Plateau':
         scheduler.step(metric_loss)  
     else:
         scheduler.step()
-    
-    num_subjects = len(reconstructions)
+        
     return metric_loss, num_subjects, reconstructions, targets, inputs, time.perf_counter() - start
 
 
@@ -108,20 +132,55 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
     if os.path.exists(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt'):
         os.remove(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt')
 
+
+def download_model(url, fname):
+    response = requests.get(url, timeout=10, stream=True)
+
+    chunk_size = 8 * 1024 * 1024  # 8 MB chunks
+    total_size_in_bytes = int(response.headers.get("content-length", 0))
+    progress_bar = tqdm(
+        desc="Downloading state_dict",
+        total=total_size_in_bytes,
+        unit="iB",
+        unit_scale=True,
+    )
+
+    with open(fname, "wb") as fh:
+        for chunk in response.iter_content(chunk_size):
+            progress_bar.update(len(chunk))
+            fh.write(chunk)
+            
+        
 def select_model(args):
     net_name = args.net_name.name
     if net_name == 'test_Unet':
+        model = testUnet(in_chans = args.in_chans, out_chans = args.out_chans)
+    elif net_name in ['newUnet', 'Unet']:
         model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
-    elif net_name == 'newUnet':
-        model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans)
-    elif 'newUnet' in net_name:
+    elif ('newUnet_' in net_name) or ('Unet_' in net_name):
         _, chans, pool_layer, drop = net_name.split('_')
         model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans,
                         chans = int(chans), num_pool_layers = int(pool_layer), drop_prob = float(drop))
+    elif net_name == 'VarNet':
+        assert args.input_key == 'kspace'
+        model = VarNet(num_cascades=args.cascade)
+        VARNET_FOLDER = "https://dl.fbaipublicfiles.com/fastMRI/trained_models/varnet/"
+        MODEL_FNAMES = "brain_leaderboard_state_dict.pt"
+        if not Path(MODEL_FNAMES).exists():
+            url_root = VARNET_FOLDER
+            download_model(url_root + MODEL_FNAMES, MODEL_FNAMES)
+
+        pretrained = torch.load(MODEL_FNAMES)
+        pretrained_copy = copy.deepcopy(pretrained)
+        for layer in pretrained_copy.keys():
+            if layer.split('.',2)[1].isdigit() and (args.cascade <= int(layer.split('.',2)[1]) <=11):
+                del pretrained[layer]
+        model.load_state_dict(pretrained)
     else:
         raise Exception("Invalid Model was given as an argument :", net_name)
     
     return model
+
 
 def select_optimizer(args, model):
     if args.optim == 'Adam':
@@ -131,6 +190,7 @@ def select_optimizer(args, model):
     else:
         raise Exception("Invalid Optimizer was given as an argument :", args.optim)
 
+        
 def select_scheduler(args, optimizer):
     if args.scheduler in ['Plateau','P']:
         args.scheduler = 'Plateau'
@@ -139,17 +199,20 @@ def select_scheduler(args, optimizer):
         return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-8)
     else:
         raise Exception("Invalid Learning rate scheduler was given as an argument :", args.scheduler)
-        
+      
+    
 def train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     print(' - Current .cuda device: ', torch.cuda.current_device())
+    
     
     model = select_model(args)  
     model.to(device=device)
     loss_type = SSIMLoss().to(device=device)
     optimizer = select_optimizer(args, model)
     scheduler = select_scheduler(args, optimizer)
+    
     
     if args.load == '':
         start_epoch = 0 
@@ -166,18 +229,25 @@ def train(args):
         print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}")
         print(f"Current learning rate is {optimizer.param_groups[0]['lr']}\n")
     
+    
     result = {}
     result['train_losses'] = []
     result['val_losses'] = []
     
+    
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
 
+    
     for epoch in tqdm(range(start_epoch, start_epoch+args.num_epochs)):
         print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, scheduler)
+        
+        train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
+        val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
+        num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
 
         val_loss = val_loss / num_subjects
 

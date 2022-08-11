@@ -19,7 +19,7 @@ from utils.common.loss_function import SSIMLoss
 from utils.model.testUnet import Unet as testUnet
 from utils.model.unet import Unet
 from utils.model.varnet import VarNet
-
+from utils.model.adaptive_varnet import AdaptiveVarNet
 
 def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -30,15 +30,25 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         for iter, data in enumerate(tepoch):
             tepoch.set_description(f"Epoch {epoch+1}")
             
-            if args.input_key == 'kspace':
-                mask, kspace, target, maximum, _, _ = data
-#                 mask = mask.cuda(non_blocking=True)
-#                 kspace = kspace.cuda(non_blocking=True)
-            else:
+            if args.input_key != 'kspace':
                 input, target, maximum, _, _ = data
                 input = input.cuda(non_blocking=True)
-
-            output = model(input) if args.input_key != 'kspace' else model(kspace, mask)
+                output = model(input)
+            elif 'VarNet' == args.net_name.name:
+                mask, kspace, target, maximum, _, _ = data
+                mask = mask.cuda(non_blocking=True)
+                kspace = kspace.cuda(non_blocking=True)
+                output = model(kspace, mask)
+            elif 'AdaptiveVarNet' == args.net_name.name:
+                mask, masked_kspace, kspace, target, maximum, _, _ = data
+                
+                kspace = kspace.cuda(non_blocking=True)
+                masked_kspace = masked_kspace.cuda(non_blocking=True)
+                mask = mask.cuda(non_blocking=True)
+                
+                print(kspace.shape)
+                
+                output = model(kspace, masked_kspace, mask)
                 
             target = target.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
@@ -62,7 +72,7 @@ def validate(args, model, data_loader, scheduler):
     start = time.perf_counter()
 
     with torch.no_grad():
-        if args.input_key == 'kspace':
+        if args.input_key == 'kspace' and args.net_name.name == 'VarNet':
             for iter, data in enumerate(data_loader):
                 mask, kspace, target, _, fnames, slices = data
 #                 kspace = kspace.cuda(non_blocking=True)
@@ -175,6 +185,10 @@ def select_model(args):
                 
         model.load_state_dict(pretrained)
         del pretrained, pretrained_copy
+    elif net_name == 'AdaptiveVarNet':
+        assert args.input_key == 'kspace'
+        model = AdaptiveVarNet(num_cascades=args.cascade)
+        
     else:
         raise Exception("Invalid Model was given as an argument :", net_name)
     
@@ -201,6 +215,10 @@ def select_scheduler(args, optimizer):
       
     
 def train(args):
+    torch.multiprocessing.set_start_method('spawn')
+    
+    print(args.input_key,'wowwowowow')
+    
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     print(' - Current .cuda device: ', torch.cuda.current_device())

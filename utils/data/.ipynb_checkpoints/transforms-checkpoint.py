@@ -10,7 +10,7 @@ def to_tensor(data):
     Returns:
         torch.Tensor: PyTorch version of data
     """
-    return torch.from_numpy(data).cuda(non_blocking=True)
+    return torch.from_numpy(data)
 
 class DataTransform:
     def __init__(self, isforward, max_key):
@@ -27,9 +27,10 @@ class DataTransform:
         return input, target, maximum, fname, slice
 
 class DataTransform_kspace:
-    def __init__(self, isforward, max_key):
+    def __init__(self, isforward, max_key, adaptive_VN = False):
         self.isforward = isforward
         self.max_key = max_key
+        self.adaptive_VN = adaptive_VN
     def __call__(self, mask, input, target, attrs, fname, slice):
         if not self.isforward:
             target = to_tensor(target)
@@ -40,5 +41,9 @@ class DataTransform_kspace:
         
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
-        mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte().cuda(non_blocking=True)
-        return mask, kspace, target, maximum, fname, slice    
+        mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
+        
+        if self.adaptive_VN == True:
+            return mask, kspace, input, target, maximum, fname, slice    
+        else:
+            return mask, kspace, target, maximum, fname, slice    

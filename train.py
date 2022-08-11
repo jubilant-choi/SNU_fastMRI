@@ -22,8 +22,8 @@ def parse():
     parser.add_argument('-o', '--optim', type=str, default='Adam', help='Name of optimizer')
     parser.add_argument('-s', '--scheduler', type=str, default='Plateau', help='Name of lr scheduler')
     
-    parser.add_argument('-t', '--data-path-train', type=Path, default='/root/input/train/', help='Directory of train data')
-    parser.add_argument('-v', '--data-path-val', type=Path, default='/root/input/val/', help='Directory of validation data')
+    parser.add_argument('-t', '--data-path-train', type=Path, default='/data/fastMRI/train/', help='Directory of train data')
+    parser.add_argument('-v', '--data-path-val', type=Path, default='/data/fastMRI/val/', help='Directory of validation data')
     parser.add_argument('--cascade', type=int, default=1, help='Number of cascades | Should be less than 12')
     
     parser.add_argument('--in-chans', type=int, default=1, help='Size of input channels for network')

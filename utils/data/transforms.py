@@ -10,7 +10,7 @@ def to_tensor(data):
     Returns:
         torch.Tensor: PyTorch version of data
     """
-    return torch.from_numpy(data)
+    return torch.from_numpy(data).cuda(non_blocking=True)
 
 class DataTransform:
     def __init__(self, isforward, max_key):
@@ -40,5 +40,5 @@ class DataTransform_kspace:
         
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
-        mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
+        mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte().cuda(non_blocking=True)
         return mask, kspace, target, maximum, fname, slice    

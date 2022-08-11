@@ -71,11 +71,16 @@ def create_data_loaders(data_path, args, isforward=False):
         target_key_ = -1
         
     if args.input_key == 'kspace':
+        if 'AdaptiveVarNet' == args.net_name.name:
+            adaptive_VN = True
+        else: 
+            adaptive_VN = False
+            
         DataTransform = DataTransform_kspace
         
     data_storage = SliceData(
         root=data_path,
-        transform=DataTransform(isforward, max_key_),
+        transform=DataTransform(isforward, max_key_, adaptive_VN),
         input_key=args.input_key,
         target_key=target_key_,
         forward = isforward

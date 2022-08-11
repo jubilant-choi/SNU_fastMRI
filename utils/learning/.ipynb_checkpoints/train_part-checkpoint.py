@@ -1,6 +1,7 @@
 import os
 import copy
 import time
+import gc
 import shutil
 import requests
 from collections import defaultdict
@@ -31,30 +32,23 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
             
             if args.input_key == 'kspace':
                 mask, kspace, target, maximum, _, _ = data
-                mask = mask.cuda(non_blocking=True)
-                kspace = kspace.cuda(non_blocking=True)
+#                 mask = mask.cuda(non_blocking=True)
+#                 kspace = kspace.cuda(non_blocking=True)
             else:
                 input, target, maximum, _, _ = data
                 input = input.cuda(non_blocking=True)
+
+            output = model(input) if args.input_key != 'kspace' else model(kspace, mask)
                 
             target = target.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
-
-            output = model(input) if args.input_key != 'kspace' else model(kspace, mask)
+            
             loss = loss_type(output, target, maximum)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-
-    #         if iter % args.report_interval == 0:
-    #             print(
-    #                 f'Epoch = [{epoch+1:3d}/{args.num_epochs:3d}] '
-    #                 f'Iter = [{iter+1:4d}/{len(data_loader):4d}] '
-    #                 f'Loss = {loss.item():.4g} '
-    #                 f'Time = {time.perf_counter() - start_iter:.4f}s',
-    #             )
-    #         start_iter = time.perf_counter()
+            
             tepoch.set_postfix(loss=loss.item())
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
@@ -71,8 +65,8 @@ def validate(args, model, data_loader, scheduler):
         if args.input_key == 'kspace':
             for iter, data in enumerate(data_loader):
                 mask, kspace, target, _, fnames, slices = data
-                kspace = kspace.cuda(non_blocking=True)
-                mask = mask.cuda(non_blocking=True)
+#                 kspace = kspace.cuda(non_blocking=True)
+#                 mask = mask.cuda(non_blocking=True)
                 output = model(kspace, mask)
                 
                 for i in range(output.shape[0]):
@@ -164,6 +158,9 @@ def select_model(args):
     elif net_name == 'VarNet':
         assert args.input_key == 'kspace'
         model = VarNet(num_cascades=args.cascade)
+        if args.load != '':
+            return model
+        
         VARNET_FOLDER = "https://dl.fbaipublicfiles.com/fastMRI/trained_models/varnet/"
         MODEL_FNAMES = "brain_leaderboard_state_dict.pt"
         if not Path(MODEL_FNAMES).exists():
@@ -175,7 +172,9 @@ def select_model(args):
         for layer in pretrained_copy.keys():
             if layer.split('.',2)[1].isdigit() and (args.cascade <= int(layer.split('.',2)[1]) <=11):
                 del pretrained[layer]
+                
         model.load_state_dict(pretrained)
+        del pretrained, pretrained_copy
     else:
         raise Exception("Invalid Model was given as an argument :", net_name)
     
@@ -196,7 +195,7 @@ def select_scheduler(args, optimizer):
         args.scheduler = 'Plateau'
         return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.1, min_lr=1e-7)
     elif args.scheduler in ['Cos','C']:
-        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-8)
+        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-8)
     else:
         raise Exception("Invalid Learning rate scheduler was given as an argument :", args.scheduler)
       
@@ -245,7 +244,10 @@ def train(args):
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, scheduler)
         
-        train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
+        result['train_losses'].append(train_loss)
+        result['val_losses'].append(val_loss/num_subjects)
+        
+#         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
         num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
 
@@ -259,9 +261,6 @@ def train(args):
             f'* Epoch = [{epoch+1:4d}/{start_epoch+args.num_epochs:4d}] | Loss (Train/Val) = {train_loss:.4g} / {val_loss:.4g}'
             f"| Time(Train/Val) = {train_time:.4f}s / {val_time:.4f}s | Learning rate = {optimizer.param_groups[0]['lr']}",
         )
-        
-        result['train_losses'].append(train_loss)
-        result['val_losses'].append(val_loss)
         
         if is_new_best:
             print("*** NewRecord ***")

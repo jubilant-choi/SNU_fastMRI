@@ -41,7 +41,6 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
                 output = model(kspace, mask)
             elif 'AdaptiveVarNet' == args.net_name.name:
                 mask, masked_kspace, kspace, target, maximum, _, _ = data
-                
                 kspace = kspace.cuda(non_blocking=True)
                 masked_kspace = masked_kspace.cuda(non_blocking=True)
                 mask = mask.cuda(non_blocking=True)
@@ -75,14 +74,24 @@ def validate(args, model, data_loader, scheduler):
         if args.input_key == 'kspace' and args.net_name.name == 'VarNet':
             for iter, data in enumerate(data_loader):
                 mask, kspace, target, _, fnames, slices = data
-#                 kspace = kspace.cuda(non_blocking=True)
-#                 mask = mask.cuda(non_blocking=True)
+                kspace = kspace.cuda(non_blocking=True)
+                mask = mask.cuda(non_blocking=True)
                 output = model(kspace, mask)
                 
                 for i in range(output.shape[0]):
                     reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
                     targets[fnames[i]][int(slices[i])] = target[i].numpy()
-                    
+        elif args.input_key == 'kspace' and args.net_name.name == 'AdaptiveVarNet':
+            for iter, data in enumerate(data_loader):
+                mask, masked_kspace, kspace, target, _, fnames, slices = data
+                kspace = kspace.cuda(non_blocking=True)
+                masked_kspace = masked_kspace.cuda(non_blocking=True)
+                mask = mask.cuda(non_blocking=True)
+                output = model(kspace, mask)
+                
+                for i in range(output.shape[0]):
+                    reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
+                    targets[fnames[i]][int(slices[i])] = target[i].numpy()            
         else:
             for iter, data in enumerate(data_loader):
                 input, target, _, fnames, slices = data
@@ -214,11 +223,7 @@ def select_scheduler(args, optimizer):
         raise Exception("Invalid Learning rate scheduler was given as an argument :", args.scheduler)
       
     
-def train(args):
-    torch.multiprocessing.set_start_method('spawn')
-    
-    print(args.input_key,'wowwowowow')
-    
+def train(args):    
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     print(' - Current .cuda device: ', torch.cuda.current_device())

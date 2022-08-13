@@ -114,7 +114,8 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     
     args = parser.parse_args()
-    
+        
     args.your_data_path = './result' / Path(args.user) / args.net_name / 'reconstructions_forward'
+    
     forward(args)
 

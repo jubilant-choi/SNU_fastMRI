@@ -103,29 +103,19 @@ if __name__ == '__main__':
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('-g', '--GPU_NUM', type=int, default=0)
-<<<<<<< HEAD
     parser.add_argument('-lp', '--leaderboard_data_path', type=str, default='/root/input/leaderboard/image')
-=======
-    parser.add_argument('-lp', '--leaderboard_data_path', type=str, default='/root/input/leaderboard/')
->>>>>>> dcf65d342c92a38d72a87fe8fa5bcbf6aa4afb5e
     """
     Modify Path Below To Test Your Results
     """
     parser.add_argument('-yp', '--your_data_path', type=str, default='../result/test_Unet/reconstructions_forward/')
     parser.add_argument('-key', '--output_key', type=str, default='reconstruction')
     
-<<<<<<< HEAD
     parser.add_argument('-n', '--net_name', type=Path, default='test_Unet', help='Name of network')
-=======
->>>>>>> dcf65d342c92a38d72a87fe8fa5bcbf6aa4afb5e
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     
     args = parser.parse_args()
-    
-<<<<<<< HEAD
+        
     args.your_data_path = './result' / Path(args.user) / args.net_name / 'reconstructions_forward'
-=======
-    args.your_data_path = './result' / Path(args.user) / args.net_name / 'reconstructions_forward
->>>>>>> dcf65d342c92a38d72a87fe8fa5bcbf6aa4afb5e
+    
     forward(args)
 

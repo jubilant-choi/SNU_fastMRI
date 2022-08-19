@@ -83,10 +83,13 @@ def save_exp_result(save_dir, setting, result, load=''):
     filename = save_dir / '{}.json'.format(exp_name)
     
     if load != '':
-        with open(filename, 'r') as f:
-            prev_result = json.load(f)
-        result['train_losses'] = prev_result['train_losses'] + [result['train_losses'][-1]]
-        result['val_losses'] = prev_result['val_losses'] + [result['val_losses'][-1]]
+        try:
+            with open(filename, 'r') as f:
+                prev_result = json.load(f)
+            result['train_losses'] = prev_result['train_losses'] + [result['train_losses'][-1]]
+            result['val_losses'] = prev_result['val_losses'] + [result['val_losses'][-1]]
+        except:
+            print("NO PREV RESULT")
         
     result.update(setting)
 

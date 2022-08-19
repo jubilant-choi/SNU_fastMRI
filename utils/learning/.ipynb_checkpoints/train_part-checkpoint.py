@@ -7,11 +7,14 @@ import requests
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 import torch
 import torch.nn as nn
-from tqdm import tqdm
+import torch.nn.utils as torch_utils
+from torch.cuda.amp import autocast
+from torch.cuda.amp import GradScaler
 
 from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss, save_exp_result
@@ -21,19 +24,24 @@ from utils.model.unet import Unet
 from utils.model.varnet import VarNet
 from utils.model.adaptive_varnet import AdaptiveVarNet
 
-def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
+def train_epoch(args, epoch, model, data_loader, optimizer, scaler, loss_type):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
     total_loss = 0.
+    
     with tqdm(data_loader, unit="batch") as tepoch:
         for iter, data in enumerate(tepoch):
             tepoch.set_description(f"Epoch {epoch+1}")
             
+#             with torch.autocast(device_type='cuda'):
             if args.input_key != 'kspace':
                 input, target, maximum, _, _ = data
                 input = input.cuda(non_blocking=True)
+
+
                 output = model(input)
+                
             elif 'VarNet' == args.net_name.name:
                 mask, kspace, target, maximum, _, _ = data
                 mask = mask.cuda(non_blocking=True)
@@ -44,21 +52,26 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
                 kspace = kspace.cuda(non_blocking=True)
                 masked_kspace = masked_kspace.cuda(non_blocking=True)
                 mask = mask.cuda(non_blocking=True)
-                
+
                 print(kspace.shape)
-                
+
                 output = model(kspace, masked_kspace, mask)
-                
+
             target = target.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
-            
-            loss = loss_type(output, target, maximum)
+
+            loss = loss_type(output, target, maximum) if args.loss == 'ssim' else loss_type(output, target)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+#             scaler.scale(loss).backward()
+#             scaler.step(optimizer)
+#             scaler.update()
             total_loss += loss.item()
             
             tepoch.set_postfix(loss=loss.item())
+            
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
 
@@ -102,6 +115,7 @@ def validate(args, model, data_loader, scheduler):
                     reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
                     targets[fnames[i]][int(slices[i])] = target[i].numpy()
                     inputs[fnames[i]][int(slices[i])] = input[i].cpu().numpy()
+                    
 
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
@@ -127,13 +141,14 @@ def validate(args, model, data_loader, scheduler):
     return metric_loss, num_subjects, reconstructions, targets, inputs, time.perf_counter() - start
 
 
-def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_best):
+def save_model(args, exp_dir, epoch, model, optimizer, scaler, best_val_loss, is_new_best):
     torch.save(
         {
             'epoch': epoch,
             'args': args,
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
+#             'scaler': scaler.state_dict(),
             'best_val_loss': best_val_loss,
             'exp_dir': exp_dir
         },
@@ -169,10 +184,10 @@ def select_model(args):
     if net_name == 'test_Unet':
         model = testUnet(in_chans = args.in_chans, out_chans = args.out_chans)
     elif net_name in ['newUnet', 'Unet']:
-        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
+        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans, alone=True)
     elif ('newUnet_' in net_name) or ('Unet_' in net_name):
         _, chans, pool_layer, drop = net_name.split('_')
-        model = newUnet(in_chans = args.in_chans, out_chans = args.out_chans,
+        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans,
                         chans = int(chans), num_pool_layers = int(pool_layer), drop_prob = float(drop))
     elif net_name == 'VarNet':
         assert args.input_key == 'kspace'
@@ -216,7 +231,7 @@ def select_optimizer(args, model):
 def select_scheduler(args, optimizer):
     if args.scheduler in ['Plateau','P']:
         args.scheduler = 'Plateau'
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.1, min_lr=1e-7)
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5, min_lr=1e-6)
     elif args.scheduler in ['Cos','C']:
         return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-8)
     else:
@@ -231,19 +246,36 @@ def train(args):
     
     model = select_model(args)  
     model.to(device=device)
-    loss_type = SSIMLoss().to(device=device)
+    loss_type = SSIMLoss().to(device=device) if args.loss == 'ssim' else nn.L1Loss().to(device=device)
     optimizer = select_optimizer(args, model)
     scheduler = select_scheduler(args, optimizer)
+    scaler = GradScaler()
+    start_epoch = 0 
+    best_val_loss = 1. 
     
-    
-    if args.load == '':
-        start_epoch = 0 
-        best_val_loss = 1. 
-    else:
+    if args.transfer != '':
+        print(f'\n*** Trasfer Checkpoint for {args.transfer} loaded ***')
+        checkpoint = torch.load(args.transfer)
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        try:
+            scaler.load_state_dict(checkpoint["scaler"])
+        except:
+            print("SCALER CHECKPOINT DOESN'T EXIST")
+        optimizer.param_groups[0]['lr'] = args.lr
+        best_prev_loss = checkpoint['best_val_loss']
+        print(f"Start Epoch = 0, prev best validation loss = {best_prev_loss:0.5f}")
+        print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}")
+        print(f"Current learning rate is {optimizer.param_groups[0]['lr']}\n")
+    elif args.load != '':
         print(f'\n*** Load Checkpoint for {args.load} ***')
         checkpoint = torch.load(args.exp_dir / args.load)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        try:
+            scaler.load_state_dict(checkpoint["scaler"])
+        except:
+            print("SCALER CHECKPOINT DOESN'T EXIST")
         optimizer.param_groups[0]['lr'] = args.lr
         start_epoch = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
@@ -257,14 +289,14 @@ def train(args):
     result['val_losses'] = []
     
     
-    train_loader = create_data_loaders(data_path = args.data_path_train, args = args)
-    val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
+    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, tv='train')
+    val_loader = create_data_loaders(data_path = args.data_path_val, args = args, tv='val')
 
     
     for epoch in tqdm(range(start_epoch, start_epoch+args.num_epochs)):
         print(f'Epoch #{epoch+1:2d} ............... {args.net_name} ...............')
         
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, scaler, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, scheduler)
         
         result['train_losses'].append(train_loss)
@@ -279,7 +311,7 @@ def train(args):
         is_new_best = val_loss < best_val_loss
         best_val_loss = min(best_val_loss, val_loss)
 
-        save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
+        save_model(args, args.exp_dir, epoch + 1, model, optimizer, scaler, best_val_loss, is_new_best)
         print('\n'
             f'* Epoch = [{epoch+1:4d}/{start_epoch+args.num_epochs:4d}] | Loss (Train/Val) = {train_loss:.4g} / {val_loss:.4g}'
             f"| Time(Train/Val) = {train_time:.4f}s / {val_time:.4f}s | Learning rate = {optimizer.param_groups[0]['lr']}",

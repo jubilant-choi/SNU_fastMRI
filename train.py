@@ -20,6 +20,7 @@ def parse():
     parser.add_argument('-r', '--report-interval', type=int, default=10, help='Report interval')
     parser.add_argument('-n', '--net-name', type=Path, required=True, help='Name of network')
     parser.add_argument('-o', '--optim', type=str, default='Adam', help='Name of optimizer')
+    parser.add_argument('-L', '--loss', type=str, default='ssim', help='Name of loss type')
     parser.add_argument('-s', '--scheduler', type=str, default='Plateau', help='Name of lr scheduler')
     
     parser.add_argument('-t', '--data-path-train', type=Path, default='/root/input/train/', help='Directory of train data')
@@ -32,9 +33,11 @@ def parse():
     parser.add_argument('--target-key', type=str, default='image_label', help='Name of target key')
     parser.add_argument('--max-key', type=str, default='max', help='Name of max key in attributes')
     
-    parser.add_argument('--load', type=str, default='', help='Name of saved model that will be loaded')
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
+    parser.add_argument('--load', type=str, default='', help='Name of saved model that will be loaded')
+    parser.add_argument('--transfer', type=str, default='', help='Name of saved model that will be used for transfer learning')    
+    parser.add_argument('--CV', type=str, default=None, help='Name of 5-fold cross validation set')
       
     args = parser.parse_args()
 #     tot_iter = 5164

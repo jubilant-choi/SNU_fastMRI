@@ -112,10 +112,11 @@ if __name__ == '__main__':
     
     parser.add_argument('-n', '--net_name', type=Path, default='test_Unet', help='Name of network')
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
+    parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
     
     args = parser.parse_args()
         
-    args.your_data_path = './result' / Path(args.user) / args.net_name / 'reconstructions_forward'
+    args.your_data_path = './result' / Path(args.user) / args.net_name / 'reconstructions_forward' / args.exp_name
     
     forward(args)
 

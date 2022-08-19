@@ -13,7 +13,7 @@ def to_tensor(data):
     return torch.from_numpy(data)
 
 class DataTransform:
-    def __init__(self, isforward, max_key):
+    def __init__(self, isforward, max_key, dum):
         self.isforward = isforward
         self.max_key = max_key
     def __call__(self, input, target, attrs, fname, slice):

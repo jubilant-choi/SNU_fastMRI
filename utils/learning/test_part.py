@@ -2,7 +2,9 @@ import numpy as np
 import torch
 
 from collections import defaultdict
+from copy import deepcopy
 from tqdm import tqdm
+from pathlib import Path
 
 from utils.common.utils import save_reconstructions
 from utils.data.load_data import create_data_loaders
@@ -12,12 +14,33 @@ from utils.model.adaptive_varnet import AdaptiveVarNet
 #from utils.model.unet_advanced import Unet
 from utils.model.unet import Unet
 
-def test(args, model, data_loader):
+def test(args, model, data_loader, boostNet=None):
     model.eval()
     reconstructions = defaultdict(dict)
     inputs = defaultdict(dict)
     
-    if args.net_name.name == 'VarNet':
+    if boostNet != None:
+        with torch.no_grad():
+            with tqdm(data_loader, unit="batch") as tepoch:
+                for iter, data in enumerate(tepoch):
+                    tepoch.set_description(f"TEST ")
+
+                    mask, kspace, _, _, fnames, slices = data
+                    kspace = kspace.cuda(non_blocking=True)
+                    mask = mask.cuda(non_blocking=True)
+                    output = boostNet(kspace, mask)
+                    output = model(output)
+
+                    for i in range(output.shape[0]):
+                        reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
+
+        for fname in reconstructions:
+            reconstructions[fname] = np.stack(
+                [out for _, out in sorted(reconstructions[fname].items())]
+            )
+        return reconstructions, None
+    
+    elif args.net_name.name == 'VarNet':
         
         with torch.no_grad():
             with tqdm(data_loader, unit="batch") as tepoch:
@@ -38,7 +61,7 @@ def test(args, model, data_loader):
             )
         return reconstructions, None
 
-    elif args.net_name.name == 'UNet':
+    elif args.net_name.name == 'Unet':
         with torch.no_grad():
             for (input, _, _, fnames, slices) in data_loader:
                 input = input.cuda(non_blocking=True)
@@ -70,14 +93,27 @@ def forward(args):
     elif args.net_name.name == 'AdaptiveVarNet':
         model = AdaptiveVarNet
     elif args.net_name.name == 'Unet':
-        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans)
-        
+        alone = True if args.boost else None
+        model = Unet(in_chans = args.in_chans, out_chans = args.out_chans, alone = alone)
+
     model.to(device=device)
     
     checkpoint = torch.load(args.exp_dir / f'{args.exp_name}_best.pt', map_location='cpu')
     print(checkpoint['epoch'], checkpoint['best_val_loss'].item())
     model.load_state_dict(checkpoint['model'])
     
-    forward_loader = create_data_loaders(data_path = args.data_path, args = args, isforward = True)
-    reconstructions, inputs = test(args, model, forward_loader)
+    boost = None
+    
+    if args.boost:
+        print("*** boosting enabled ***")
+        varnet_path = Path('./result/JB/VarNet/checkpoints/VarNet_c1_1e-5_best.pt')
+        boost = VarNet(num_cascades=2)
+        boost.load_state_dict(torch.load(varnet_path,map_location='cpu')['model'])
+        boost.to(device=device)
+        
+        args.input_key = 'kspace'
+        args.net_name = Path('VarNet')
+        
+    forward_loader = create_data_loaders(data_path = args.data_path, args = args, tv='test',isforward = True)
+    reconstructions, inputs = test(args, model, forward_loader, boost)
     save_reconstructions(reconstructions, args.forward_dir, inputs=inputs)

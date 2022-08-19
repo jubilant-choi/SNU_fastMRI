@@ -25,6 +25,9 @@ def parse():
     
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
+    parser.add_argument('--CV', type=int, default=None, help='Name of CV data')
+    parser.add_argument('--boost', type=bool, default=False, help='enable boosting')
+    parser.add_argument('--ensemble', type=bool, default=False, help='enable model ensemble')
       
     args = parser.parse_args()
     
@@ -33,7 +36,8 @@ def parse():
 if __name__ == '__main__':
     args = parse()
     args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
-    args.forward_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_forward' 
+#     args.forward_dir = Path('/root/input/recon/kspace')
+    args.forward_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_forward' / args.exp_name 
     print(args.forward_dir)
     forward(args)
    

@@ -19,6 +19,7 @@ class Unet(nn.Module):
         chans: int = 32,
         num_pool_layers: int = 4,
         drop_prob: float = 0.0,
+        alone = None
     ):
         """
         Args:
@@ -35,6 +36,7 @@ class Unet(nn.Module):
         self.chans = chans
         self.num_pool_layers = num_pool_layers
         self.drop_prob = drop_prob
+        self.alone = alone
 
         self.down_sample_layers = nn.ModuleList([ConvBlock(in_chans, chans, drop_prob)])
         ch = chans
@@ -60,10 +62,16 @@ class Unet(nn.Module):
         
     def norm(self, x):
         b, h, w = x.shape
-        x = x.view(b, h * w)
-        mean = x.mean(dim=1).view(b, 1, 1)
-        std = x.std(dim=1).view(b, 1, 1)
-        x = x.view(b, h, w)
+        try:
+            x = x.view(b, h * w)
+            mean = x.mean(dim=1).view(b, 1, 1)
+            std = x.std(dim=1).view(b, 1, 1)
+            x = x.view(b, h, w)
+        except:
+            x = x.reshape(b, h * w)
+            mean = x.mean(dim=1).reshape(b, 1, 1)
+            std = x.std(dim=1).reshape(b, 1, 1)
+            x = x.reshape(b, h, w)
         return (x - mean) / std, mean, std
     
     def unnorm(self, x, mean, std):
@@ -76,8 +84,9 @@ class Unet(nn.Module):
         Returns:
             Output tensor of shape `(N, out_chans, H, W)`.
         """
-#         image, mean, std = self.norm(image)
-#         image = image.unsqueeze(1)
+        if self.alone:
+            image, mean, std = self.norm(image)
+            image = image.unsqueeze(1)
         
         stack = []
         output = image
@@ -106,9 +115,10 @@ class Unet(nn.Module):
 
             output = torch.cat([output, downsample_layer], dim=1)
             output = conv(output)
-
-#         output = output.squeeze(1)
-#         output = self.unnorm(output, mean, std)
+        
+        if self.alone:
+            output = output.squeeze(1)
+            output = self.unnorm(output, mean, std)
         
         return output
 

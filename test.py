@@ -18,7 +18,7 @@ def parse():
     
     parser.add_argument('-p', '--data-path', type=Path, default='/root/input/leaderboard/', help='Directory of test data')
     
-    parser.add_argument('--cascade', type=int, default=1, help='Number of cascades | Should be less than 12')
+    parser.add_argument('--cascade', type=int, default=2, help='Number of cascades | Should be less than 12')
     parser.add_argument('--in-chans', type=int, default=1, help='Size of input channels for network')
     parser.add_argument('--out-chans', type=int, default=1, help='Size of output channels for network')
     parser.add_argument('--input-key', type=str, default='image_input', help='Name of input key')
@@ -36,8 +36,9 @@ def parse():
 if __name__ == '__main__':
     args = parse()
     args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
-#     args.forward_dir = Path('/root/input/recon/kspace')
     args.forward_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_forward' / args.exp_name 
+    if args.data_path.name == '/root/input':
+        args.forward_dir = Path('/root/input/recon/kspace')
     print(args.forward_dir)
     forward(args)
    

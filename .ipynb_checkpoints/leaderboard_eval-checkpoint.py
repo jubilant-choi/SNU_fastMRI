@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import numpy as np
+import pandas as pd
 import h5py
 import random
 import glob
@@ -60,6 +61,10 @@ def forward(args):
     ssim_total = 0
     idx = 0
     ssim_calculator = SSIM().to(device=device)
+    
+    fnames = []
+    ssims = []
+    
     with torch.no_grad():
         for i_subject in range(58):
             l_fname = os.path.join(args.leaderboard_data_path, 'brain_test' + str(i_subject+1) + '.h5')
@@ -86,9 +91,13 @@ def forward(args):
                     recon = torch.from_numpy(recon).to(device=device)
                     
                 #ssim_total += ssim_calculator(recon, target, maximum).cpu().numpy()
-                ssim_total += ssim_calculator(recon*mask, target*mask, maximum).cpu().numpy()
+                curr_ssim = ssim_calculator(recon*mask, target*mask, maximum).cpu().numpy()
+                ssim_total += curr_ssim
+                ssims.append(curr_ssim)
+                fnames.append(y_fname)
                 idx += 1
-            
+    res = pd.DataFrame({'fnames':fnames,'ssims':ssims})        
+    res.to_csv('res_all.csv')
     print("Leaderboard Dataset SSIM : {:.4f}".format(ssim_total/idx))
 
 

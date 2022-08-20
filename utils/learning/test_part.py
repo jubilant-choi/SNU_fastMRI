@@ -12,7 +12,7 @@ from utils.data.load_data import create_data_loaders
 from utils.model.varnet import VarNet
 from utils.model.adaptive_varnet import AdaptiveVarNet
 #from utils.model.unet_advanced import Unet
-from utils.model.unet import Unet
+from utils.model.unet import Unet, UnetPP
 
 def test(args, model, data_loader, boostNet=None):
     model.eval()
@@ -21,9 +21,9 @@ def test(args, model, data_loader, boostNet=None):
     
     if boostNet != None:
         with torch.no_grad():
-            with tqdm(data_loader, unit="batch") as tepoch:
+            with tqdm(data_loader, unit="batch", mininterval=2) as tepoch:
+                tepoch.set_description(f"TEST ")
                 for iter, data in enumerate(tepoch):
-                    tepoch.set_description(f"TEST ")
 
                     mask, kspace, _, _, fnames, slices = data
                     kspace = kspace.cuda(non_blocking=True)
@@ -43,9 +43,9 @@ def test(args, model, data_loader, boostNet=None):
     elif args.net_name.name == 'VarNet':
         
         with torch.no_grad():
-            with tqdm(data_loader, unit="batch") as tepoch:
+            with tqdm(data_loader, unit="batch", mininterval=2) as tepoch:
+                tepoch.set_description(f"TEST ")
                 for iter, data in enumerate(tepoch):
-                    tepoch.set_description(f"TEST ")
 
                     mask, kspace, _, _, fnames, slices = data
                     kspace = kspace.cuda(non_blocking=True)
@@ -63,7 +63,7 @@ def test(args, model, data_loader, boostNet=None):
 
     elif args.net_name.name == 'Unet':
         with torch.no_grad():
-            for (input, _, _, fnames, slices) in data_loader:
+            for (_, input, _, _, fnames, slices) in data_loader:
                 input = input.cuda(non_blocking=True)
                 output = model(input)
 
@@ -95,7 +95,9 @@ def forward(args):
     elif args.net_name.name == 'Unet':
         alone = True if args.boost else None
         model = Unet(in_chans = args.in_chans, out_chans = args.out_chans, alone = alone)
-
+    elif net_name == 'UnetPP':
+        model = UnetPP(in_chans = args.in_chans, out_chans = args.out_chans)
+        
     model.to(device=device)
     
     checkpoint = torch.load(args.exp_dir / f'{args.exp_name}_best.pt', map_location='cpu')
@@ -106,7 +108,7 @@ def forward(args):
     
     if args.boost:
         print("*** boosting enabled ***")
-        varnet_path = Path('./result/JB/VarNet/checkpoints/VarNet_c1_1e-5_best.pt')
+        varnet_path = Path('./result/JB/VarNet/checkpoints/VarNet_test_sj_best.pt')
         boost = VarNet(num_cascades=2)
         boost.load_state_dict(torch.load(varnet_path,map_location='cpu')['model'])
         boost.to(device=device)

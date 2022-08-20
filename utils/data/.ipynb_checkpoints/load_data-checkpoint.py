@@ -24,7 +24,9 @@ class SliceData(Dataset):
             image_files = list(Path(root / "image").iterdir()) if isinstance(root, Path) else make_dataset(root,'image', tv)
             for fname in sorted(image_files):
                 num_slices = self._get_metadata(fname)
-
+                
+                if 'final' in tv:
+                    num_slices -= 1
                 self.image_examples += [
                     (fname, slice_ind) for slice_ind in range(num_slices)
                 ]
@@ -38,7 +40,8 @@ class SliceData(Dataset):
             
         for fname in sorted(input_files):
             num_slices = self._get_metadata(fname)
-
+            if 'final' in tv:
+                    num_slices -= 1
             self.input_examples += [
                 (fname, slice_ind) for slice_ind in range(num_slices)
             ]

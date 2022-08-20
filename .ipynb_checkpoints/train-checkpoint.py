@@ -37,7 +37,9 @@ def parse():
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
     parser.add_argument('--load', type=str, default='', help='Name of saved model that will be loaded')
     parser.add_argument('--transfer', type=str, default='', help='Name of saved model that will be used for transfer learning')    
-    parser.add_argument('--CV', type=str, default=None, help='Name of 5-fold cross validation set')
+    parser.add_argument('--freeze', type=str, default=None, help='option for transfer learning') 
+    parser.add_argument('--CV', type=int, default=None, help='Name of 5-fold cross validation set')
+    parser.add_argument('--final', type=str, default=None, help='option for final training')    
       
     args = parser.parse_args()
 #     tot_iter = 5164

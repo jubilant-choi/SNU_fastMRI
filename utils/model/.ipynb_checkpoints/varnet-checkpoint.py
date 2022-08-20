@@ -111,16 +111,16 @@ class NormUnet(nn.Module):
             raise ValueError("Last dimension must be 2 for complex.")
 
         # get shapes for unet and normalize
-        x = self.complex_to_chan_dim(x)
-        x, mean, std = self.norm(x)
+#         x = self.complex_to_chan_dim(x)
+        x, mean, std = self.norm(self.complex_to_chan_dim(x))
         x, pad_sizes = self.pad(x)
 
-        x = self.unet(x)
+#         x = self.unet(x)
 
         # get shapes back and unnormalize
-        x = self.unpad(x, *pad_sizes)
-        x = self.unnorm(x, mean, std)
-        x = self.chan_complex_to_last_dim(x)
+#         x = self.unpad(x, *pad_sizes)
+#         x = self.unnorm(x, mean, std)
+        x = self.chan_complex_to_last_dim(self.unnorm(self.unpad(x = self.unet(x), *pad_sizes), mean, std))
 
         return x
 
@@ -176,11 +176,11 @@ class SensitivityModel(nn.Module):
 
     def forward(self, masked_kspace: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # get low frequency line locations and mask them out
-        squeezed_mask = mask[:, 0, 0, :, 0]
-        cent = squeezed_mask.shape[1] // 2
+#         squeezed_mask = mask[:, 0, 0, :, 0]
+        cent = mask[:, 0, 0, :, 0].shape[1] // 2
         # running argmin returns the first non-zero
-        left = torch.argmin(squeezed_mask[:, :cent].flip(1), dim=1)
-        right = torch.argmin(squeezed_mask[:, cent:], dim=1)
+        left = torch.argmin(mask[:, 0, 0, :, 0][:, :cent].flip(1), dim=1)
+        right = torch.argmin(mask[:, 0, 0, :, 0][:, cent:], dim=1)
         num_low_freqs = torch.max(
             2 * torch.min(left, right), torch.ones_like(left)
         )  # force a symmetric center unless 1
@@ -189,13 +189,13 @@ class SensitivityModel(nn.Module):
         x = transforms.batched_mask_center(masked_kspace, pad, pad + num_low_freqs)
 
         # convert to image space
-        x = fastmri.ifft2c(x)
-        x, b = self.chans_to_batch_dim(x)
+#         x = fastmri.ifft2c(x)
+        x, b = self.chans_to_batch_dim(fastmri.ifft2c(x))
 
         # estimate sensitivities
-        x = self.norm_unet(x)
-        x = self.batch_chans_to_chan_dim(x, b)
-        x = self.divide_root_sum_of_squares(x)
+#         x = self.norm_unet(x)
+#         x = self.batch_chans_to_chan_dim(x, b)
+        x = self.divide_root_sum_of_squares(self.batch_chans_to_chan_dim(self.norm_unet(x), b))
 
         return x
 
@@ -235,11 +235,11 @@ class VarNet(nn.Module):
         )
 
     def forward(self, masked_kspace: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        sens_maps = self.sens_net(masked_kspace, mask)
+#         sens_maps = self.sens_net(masked_kspace, mask)
         kspace_pred = masked_kspace.clone()
 
         for cascade in self.cascades:
-            kspace_pred = cascade(kspace_pred, masked_kspace, mask, sens_maps)
+            kspace_pred = cascade(kspace_pred, masked_kspace, mask, self.sens_net(masked_kspace, mask))
         result = fastmri.rss(fastmri.complex_abs(fastmri.ifft2c(kspace_pred)), dim=1)
         height = result.shape[-2]
         width = result.shape[-1]

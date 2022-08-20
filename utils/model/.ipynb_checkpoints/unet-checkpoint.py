@@ -122,6 +122,114 @@ class Unet(nn.Module):
         
         return output
 
+    
+class UnetPP(Unet):
+    def __init__(
+        self,
+        in_chans: int,
+        out_chans: int,
+        chans: int = 32,
+        num_pool_layers: int = 5,
+        drop_prob: float = 0.0,
+        deep_supervision: bool = False,
+        alone = True
+    ):
+        super().__init__(in_chans,out_chans)
+
+        self.in_chans = in_chans
+        self.out_chans = out_chans
+        self.chans = chans
+        self.num_pool_layers = num_pool_layers
+        self.drop_prob = drop_prob
+        self.deep_supervision = deep_supervision
+        self.alone = alone
+        
+        nb_filter = [self.chans * (2**i) for i in range(self.num_pool_layers)]
+        
+        self.deep_supervision = deep_supervision
+
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        
+        self.conv0_0 = ConvBlock(self.in_chans, nb_filter[0])
+        self.conv1_0 = ConvBlock(nb_filter[0], nb_filter[1])
+        self.conv2_0 = ConvBlock(nb_filter[1], nb_filter[2])
+        self.conv3_0 = ConvBlock(nb_filter[2], nb_filter[3])
+        self.conv4_0 = ConvBlock(nb_filter[3], nb_filter[4])        
+        
+        self.conv0_1 = ConvBlock(nb_filter[0]+nb_filter[1], nb_filter[0])
+        self.conv1_1 = ConvBlock(nb_filter[1]+nb_filter[2], nb_filter[1])
+        self.conv2_1 = ConvBlock(nb_filter[2]+nb_filter[3], nb_filter[2])
+        self.conv3_1 = ConvBlock(nb_filter[3]+nb_filter[4], nb_filter[3])        
+        
+        self.conv0_2 = ConvBlock(nb_filter[0]*2+nb_filter[1], nb_filter[0])
+        self.conv1_2 = ConvBlock(nb_filter[1]*2+nb_filter[2], nb_filter[1])
+        self.conv2_2 = ConvBlock(nb_filter[2]*2+nb_filter[3], nb_filter[2])        
+        
+        self.conv0_3 = ConvBlock(nb_filter[0]*3+nb_filter[1], nb_filter[0])
+        self.conv1_3 = ConvBlock(nb_filter[1]*3+nb_filter[2], nb_filter[1])
+        
+        self.conv0_4 = ConvBlock(nb_filter[0]*4+nb_filter[1], nb_filter[0])        
+
+        if self.deep_supervision:
+            self.final1 = nn.Conv2d(nb_filter[0], self.out_chans, kernel_size=1, stride=1)
+            self.final2 = nn.Conv2d(nb_filter[0], self.out_chans, kernel_size=1, stride=1)
+            self.final3 = nn.Conv2d(nb_filter[0], self.out_chans, kernel_size=1, stride=1)
+            self.final4 = nn.Conv2d(nb_filter[0], self.out_chans, kernel_size=1, stride=1)
+        else:
+            self.final = nn.Conv2d(nb_filter[0], self.out_chans, kernel_size=1, stride=1)
+    
+    def pool(self, output):
+        return F.avg_pool2d(output, kernel_size=2, stride=2, padding=0)
+    
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            image: Input 4D tensor of shape `(N, in_chans, H, W)`.
+        Returns:
+            Output tensor of shape `(N, out_chans, H, W)`.
+        """
+        if self.alone:
+            image, mean, std = self.norm(image)
+            image = image.unsqueeze(1)
+        
+        output = image
+
+        x0_0 = self.conv0_0(output)
+        
+        x1_0 = self.conv1_0(self.pool(x0_0))
+        x0_1 = self.conv0_1(torch.cat([x0_0, self.up(x1_0)], 1))
+
+        x2_0 = self.conv2_0(self.pool(x1_0))
+        x1_1 = self.conv1_1(torch.cat([x1_0, self.up(x2_0)], 1))
+        x0_2 = self.conv0_2(torch.cat([x0_0, x0_1, self.up(x1_1)], 1))
+
+        x3_0 = self.conv3_0(self.pool(x2_0))
+        x2_1 = self.conv2_1(torch.cat([x2_0, self.up(x3_0)], 1))
+        x1_2 = self.conv1_2(torch.cat([x1_0, x1_1, self.up(x2_1)], 1))
+        x0_3 = self.conv0_3(torch.cat([x0_0, x0_1, x0_2, self.up(x1_2)], 1))
+
+        x4_0 = self.conv4_0(self.pool(x3_0))
+        x3_1 = self.conv3_1(torch.cat([x3_0, self.up(x4_0)], 1))
+        x2_2 = self.conv2_2(torch.cat([x2_0, x2_1, self.up(x3_1)], 1))
+        x1_3 = self.conv1_3(torch.cat([x1_0, x1_1, x1_2, self.up(x2_2)], 1))
+        x0_4 = self.conv0_4(torch.cat([x0_0, x0_1, x0_2, x0_3, self.up(x1_3)], 1))        
+
+        if self.deep_supervision:
+            output1 = self.final1(x0_1)*0.1
+            output2 = self.final2(x0_2)*0.2
+            output3 = self.final3(x0_3)*0.3
+            output4 = self.final4(x0_4)*0.4
+            output = torch.sum(torch.stack([output1,output2,output3,output4]),dim=0)
+
+        else:
+            output = self.final(x0_4)
+        
+        if self.alone:
+            output = output.squeeze(1)
+            output = self.unnorm(output, mean, std)
+        
+        return output
+    
 
 class ConvBlock(nn.Module):
     """
@@ -129,7 +237,7 @@ class ConvBlock(nn.Module):
     instance normalization, LeakyReLU activation and dropout.
     """
 
-    def __init__(self, in_chans: int, out_chans: int, drop_prob: float):
+    def __init__(self, in_chans: int, out_chans: int, drop_prob: float=0):
         """
         Args:
             in_chans: Number of channels in the input.

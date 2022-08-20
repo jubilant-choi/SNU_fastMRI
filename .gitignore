@@ -3,5 +3,8 @@
 *.h5
 *.png
 *.pt
+<<<<<<< HEAD
 *.ipynb
+=======
+>>>>>>> 1e444fb26a5b3c334a06d6b0e5bfa94f98ec8246
 >>>>>>> dcf65d342c92a38d72a87fe8fa5bcbf6aa4afb5e

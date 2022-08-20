@@ -28,12 +28,8 @@ def parse():
     parser.add_argument('--CV', type=int, default=None, help='Name of CV data')
     parser.add_argument('--boost', type=bool, default=False, help='enable boosting')
     parser.add_argument('--ensemble', type=bool, default=False, help='enable model ensemble')
-<<<<<<< HEAD
     parser.add_argument('--final', type=str, default=None, help='option for final training')    
     
-=======
-      
->>>>>>> 1e444fb26a5b3c334a06d6b0e5bfa94f98ec8246
     args = parser.parse_args()
     
     return args
@@ -42,12 +38,10 @@ if __name__ == '__main__':
     args = parse()
     args.exp_dir = './result' / Path(args.user) / args.net_name / 'checkpoints'
     args.forward_dir = './result' / Path(args.user) / args.net_name / 'reconstructions_forward' / args.exp_name 
-<<<<<<< HEAD
+    
     if str(args.data_path) == '/root/input':
-=======
-    if args.data_path.name == '/root/input':
->>>>>>> 1e444fb26a5b3c334a06d6b0e5bfa94f98ec8246
         args.forward_dir = Path('/root/input/recon/kspace')
+        
     print(args.forward_dir)
     forward(args)
    

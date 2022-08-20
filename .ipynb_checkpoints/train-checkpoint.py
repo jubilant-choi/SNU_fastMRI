@@ -35,6 +35,7 @@ def parse():
     
     parser.add_argument('-u', '--user', type=str, choices=['SJ','JB'], required=True, help='User name')
     parser.add_argument('-x', '--exp-name', type=str, default='test', help='Name of an experiment')
+    parser.add_argument('--save-all', type=str, default=None, help='option for save all models of each epoch')    
     parser.add_argument('--load', type=str, default='', help='Name of saved model that will be loaded')
     parser.add_argument('--transfer', type=str, default='', help='Name of saved model that will be used for transfer learning')    
     parser.add_argument('--freeze', type=str, default=None, help='option for transfer learning') 

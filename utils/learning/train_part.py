@@ -47,8 +47,11 @@ def train_epoch(args, epoch, model, data_loader, optimizer, scaler, loss_type):
     with tqdm(data_loader, unit="batch", mininterval=5) as tepoch:
         tepoch.set_description(f"Epoch {epoch+1}")
         for iter, data in enumerate(tepoch):
-            
-            with torch.autocast(device_type='cuda'):
+            try:
+                autocaster = torch.autocast(device_type='cuda')
+            except:
+                autocaster = autocast()
+            with autocaster:
                 if args.input_key != 'kspace':
                     _, input, target, maximum, _, _ = data
     #                 input = input.cuda(non_blocking=True)
@@ -167,9 +170,11 @@ def save_model(args, exp_dir, epoch, model, optimizer, scaler, best_val_loss, is
     )
     if is_new_best:
         shutil.copyfile(exp_dir / f'{args.exp_name+"_epoch"+str(epoch)}.pt', exp_dir / f'{args.exp_name}_best.pt')
-        
-    if os.path.exists(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt'):
-        os.remove(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt')
+    
+    if args.save_all == None:
+        if os.path.exists(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt'):
+            os.remove(args.exp_dir / f'{args.exp_name+"_epoch"+str(epoch-1)}.pt')
+    
 
 
 def download_model(url, fname):
@@ -293,7 +298,7 @@ def train(args):
     
     if args.transfer != '' or args.load != '':
         load_path = args.transfer if args.transfer != '' else (args.exp_dir / args.load)
-        print(f'\n*** Load Checkpoint for {load_path} loaded ***')
+        print(f'\n*** Load Checkpoint for {load_path} loaded ***')        
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint['model'])
         try:
@@ -303,7 +308,8 @@ def train(args):
             print("OPTIM LOAD FAILED")
         optimizer.param_groups[0]['lr'] = args.lr
         best_prev_loss = checkpoint['best_val_loss']
-        if args.load:
+        if args.load and args.exp_name in args.load:
+            start_epoch = checkpoint['epoch']
             best_val_loss = best_prev_loss
         print(f"Start Epoch = {start_epoch+1}, prev best validation loss = {best_prev_loss:0.5f}")
         print(f"Previous learning rate was {checkpoint['optimizer']['param_groups'][0]['lr']}")
